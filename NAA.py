@@ -9,11 +9,12 @@ import json
 import threading
 import pystray
 from PIL import Image
-import pythoncom
-from win32com.shell import shell
+import ctypes
 import ctypes.wintypes
+from ctypes import POINTER, cast
 from tkinter import messagebox
-
+from comtypes import CLSCTX_ALL
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 # 检测并请求管理员权限（如果需要）
 def is_admin():
@@ -63,45 +64,43 @@ def load_config(config_file):
         return config
 
 def manage_startup(auto_startup):
-    """管理开机自启动"""
+    """管理开机自启动（使用任务计划程序）"""
+    import subprocess
+
+    # 任务名称，可以根据需要修改
+    TASK_NAME = "NAAAutoStart"
 
     # 获取当前脚本的绝对路径
     current_script = os.path.abspath(sys.argv[0])
 
-    # 启动文件夹路径
-    startup_folder = os.path.join(os.environ['APPDATA'], r'Microsoft\Windows\Start Menu\Programs\Startup')
-
-    # 快捷方式名称
-    shortcut_name = 'MyProgram.lnk'  # 您可以修改为您想要的名称
-
-    # 快捷方式完整路径
-    shortcut_path = os.path.join(startup_folder, shortcut_name)
-
     if auto_startup:
-        # 创建快捷方式
-        create_shortcut(current_script, shortcut_path)
-        print("已添加开机自启动。")
+        # 创建计划任务
+        cmd = [
+            "schtasks", "/Create", "/F",
+            "/SC", "ONLOGON",
+            "/RL", "HIGHEST",
+            "/TN", TASK_NAME,
+            "/TR", f'"{current_script}"'
+        ]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                print("已添加开机自启动（任务计划程序）。")
+            else:
+                print("添加开机自启动失败：", result.stderr)
+        except Exception as e:
+            print("添加开机自启动时发生异常：", e)
     else:
-        # 删除快捷方式
-        if os.path.exists(shortcut_path):
-            os.remove(shortcut_path)
-            print("已移除开机自启动。")
-        else:
-            print("开机自启动未设置，无需移除。")
-
-def create_shortcut(target, shortcut_path):
-    """创建快捷方式"""
-    pythoncom.CoInitialize()
-
-    shortcut = pythoncom.CoCreateInstance(
-        shell.CLSID_ShellLink, None,
-        pythoncom.CLSCTX_INPROC_SERVER, shell.IID_IShellLink)
-    shortcut.SetPath(target)
-    shortcut.SetWorkingDirectory(os.path.dirname(target))
-    # 设置图标，可以使用目标程序的图标
-    shortcut.SetIconLocation(target, 0)
-    persist_file = shortcut.QueryInterface(pythoncom.IID_IPersistFile)
-    persist_file.Save(shortcut_path, 0)
+        # 删除计划任务
+        cmd = ["schtasks", "/Delete", "/F", "/TN", TASK_NAME]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                print("已移除开机自启动（任务计划程序）。")
+            else:
+                print("移除开机自启动失败：", result.stderr)
+        except Exception as e:
+            print("移除开机自启动时发生异常：", e)
 
 def show_countdown(countdown):
     root = tk.Tk()
@@ -155,6 +154,9 @@ def wait_for_process_exit(process_name):
     print(f"进程 {process_name} 已退出。")
 
 def run_programs(config):
+
+    mute_system()
+
     program_list = config['program_list']
     process_names = config['process_names']
     shutdown_delay = config['shutdown_delay']
@@ -172,6 +174,8 @@ def run_programs(config):
             print(f"程序 {program} 已完成。")
         except Exception as e:
             print(f"程序 {program} 执行出错：", e)
+
+    unmute_system()
     if auto_shutdown:
         # 设置自动关机
         os.system(f"shutdown -s -t {shutdown_delay}")
@@ -252,17 +256,32 @@ def create_tray_icon(run_now_event):
     # 启动托盘图标
     tray_icon.run()
 
+def mute_system():
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(
+        IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+    volume.SetMute(1, None)  # 设置静音
+
+def unmute_system():
+    devices = AudioUtilities.GetSpeakers()
+    interface = devices.Activate(
+        IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+    volume = cast(interface, POINTER(IAudioEndpointVolume))
+    volume.SetMute(0, None)  # 取消静音
+
 def main():
-    if not is_admin():
-        root = tk.Tk()
-        root.withdraw()  # 隐藏主窗口
-        result = messagebox.showerror("需要管理员权限", "NAA需要以管理员权限运行。")
-        sys.exit()    
 
     # 获取当前脚本所在的目录
     current_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
     # 将工作目录设置为脚本所在目录
     os.chdir(current_dir)
+
+    if not is_admin():
+        root = tk.Tk()
+        root.withdraw()  # 隐藏主窗口
+        messagebox.showerror("需要管理员权限", "NAA需要以管理员权限运行。")
+        sys.exit()    
 
     global config
     # 加载配置
