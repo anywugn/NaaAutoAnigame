@@ -177,7 +177,7 @@ def run_programs(config):
         os.system(f"shutdown -s -t {shutdown_delay}")
         print(f"系统将在 {shutdown_delay} 秒后自动关机。")
 
-def task_thread(config):
+def task_thread(config, run_now_event):
     """任务线程"""
     run_hour = config['run_hour']
     run_minute = config['run_minute']
@@ -192,28 +192,35 @@ def task_thread(config):
             run_time += timedelta(days=1)
         time_to_wait = (run_time - now).total_seconds()
 
-        # 等待直到指定时间前倒计时的秒数
-        if time_to_wait > countdown_duration:
-            time.sleep(time_to_wait - countdown_duration)
-        elif time_to_wait > 0:
-            time.sleep(time_to_wait)
+        # 等待直到指定时间前倒计时的秒数，或者等待事件被设置
+        wait_time = max(0, time_to_wait - countdown_duration)
+        if run_now_event.wait(timeout=wait_time):
+            # 事件被设置，立即运行程序序列
+            print("接收到立即运行程序序列的指令。")
+        else:
+            # 时间到了，继续执行
+            pass
 
-        # 在主线程中弹出倒计时提醒
-        show_countdown(countdown=countdown_duration)
+        if run_now_event.is_set():
+            run_now_event.clear()
+            show_countdown(countdown=0)
+            run_programs(config)
+            break  # 如果需要每天运行，注释掉此行
+        else:
+            # 开始倒计时提醒
+            show_countdown(countdown=countdown_duration)
+            # 等待剩余的时间，或者等待事件被设置
+            now = datetime.now()
+            remaining_seconds = (run_time - now).total_seconds()
+            if remaining_seconds > 0:
+                if run_now_event.wait(timeout=remaining_seconds):
+                    print("接收到立即运行程序序列的指令。")
+                    run_now_event.clear()
+            # 运行程序序列
+            run_programs(config)
+            break  # 如果需要每天运行，注释掉此行
 
-        # 等待剩余的时间（如果有）
-        now = datetime.now()
-        remaining_seconds = (run_time - now).total_seconds()
-        if remaining_seconds > 0:
-            time.sleep(remaining_seconds)
-
-        # 开始运行主要功能
-        run_programs(config)
-
-        # 程序序列执行完毕，退出循环（如果需要每天运行，注释掉下一行）
-        break
-
-def create_tray_icon():
+def create_tray_icon(run_now_event):
     """创建系统托盘图标"""
 
     # 加载图标
@@ -224,8 +231,19 @@ def create_tray_icon():
     else:
         icon_image = Image.open(icon_path)
 
+    def on_ignore_timer(icon, item):
+        """忽略定时器，立即运行程序序列"""
+        run_now_event.set()
+        print("已触发立即运行程序序列的指令。")
+
+    def on_exit(icon, item):
+        """退出程序"""
+        icon.stop()
+        sys.exit()
+
     # 创建托盘图标
     menu = pystray.Menu(
+        pystray.MenuItem('忽略定时，立即运行', on_ignore_timer),
         pystray.MenuItem('退出', on_exit)
     )
 
@@ -234,18 +252,12 @@ def create_tray_icon():
     # 启动托盘图标
     tray_icon.run()
 
-def on_exit(icon, item):
-    """退出程序"""
-    icon.stop()
-    sys.exit()
-
 def main():
     if not is_admin():
         root = tk.Tk()
         root.withdraw()  # 隐藏主窗口
         result = messagebox.showerror("需要管理员权限", "NAA需要以管理员权限运行。")
         sys.exit()    
-
 
     # 获取当前脚本所在的目录
     current_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
@@ -260,13 +272,16 @@ def main():
     auto_startup = config.get('auto_startup', False)
     manage_startup(auto_startup)
 
+    # 创建线程事件
+    run_now_event = threading.Event()
+
     # 启动任务线程
-    t = threading.Thread(target=task_thread, args=(config,))
+    t = threading.Thread(target=task_thread, args=(config, run_now_event))
     t.daemon = True
     t.start()
 
     # 创建系统托盘图标
-    create_tray_icon()
+    create_tray_icon(run_now_event)
 
 if __name__ == "__main__":
     main()
