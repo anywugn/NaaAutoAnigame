@@ -1,0 +1,16 @@
+{
+    "program_list": [
+        "D:\\ProgramPortable\\ZenlessZoneZero-OneDragon\\OneDragon Scheduler.exe",
+        "D:\\ProgramPortable\\March7thAssistant\\March7th Assistant.exe"
+    ],
+    "process_names": [
+        "ZenlessZoneZero.exe",
+        "StarRail.exe"
+    ],
+    "run_hour": 12,
+    "run_minute": 5,
+    "countdown_duration": 10,
+    "shutdown_delay": 600,
+    "auto_shutdown": false,
+    "auto_startup": false
+}

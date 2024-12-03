@@ -1,0 +1,18 @@
+{
+    "program_list": [
+        "D:\\ProgramPortable\\Program1.exe",
+        "D:\\ProgramPortable\\Program2.exe",
+        "D:\\ProgramPortable\\Program3.exe"
+    ],
+    "process_names": [
+        "Process1.exe",
+        "Process2.exe",
+        "Process3.exe"
+    ],
+    "run_hour": 12,
+    "run_minute": 0,
+    "countdown_duration": 5,
+    "shutdown_delay": 600,
+    "auto_shutdown": true,
+    "auto_startup": true
+}
