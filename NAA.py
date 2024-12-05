@@ -209,7 +209,7 @@ def task_thread(config, run_now_event):
             run_now_event.clear()
             show_countdown(countdown=0)
             run_programs(config)
-            break  # 如果需要每天运行，注释掉此行
+            #break  # 如果需要每天运行，注释掉此行
         else:
             # 开始倒计时提醒
             show_countdown(countdown=countdown_duration)
@@ -251,7 +251,7 @@ def create_tray_icon(run_now_event):
         pystray.MenuItem('退出', on_exit)
     )
 
-    tray_icon = pystray.Icon('MyProgram', icon_image, '程序正在后台运行', menu)
+    tray_icon = pystray.Icon('MyProgram', icon_image, 'NAA正在后台待命', menu)
 
     # 启动托盘图标
     tray_icon.run()
