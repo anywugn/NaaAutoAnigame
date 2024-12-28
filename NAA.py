@@ -43,7 +43,7 @@ def load_config(config_file):
             "ZenlessZoneZero.exe",
             "StarRail.exe"
         ],
-        "run_hour": 12,
+        "run_hour": 13,
         "run_minute": 5,
         "countdown_duration": 10,
         "shutdown_delay": 600,
@@ -149,8 +149,14 @@ def wait_for_process_start(process_name, timeout=30):
 def wait_for_process_exit(process_name):
     """等待进程退出"""
     print(f"等待进程 {process_name} 退出...")
+    time_limit = 2400  #40分钟
+    time_watied = 0
     while is_process_running(process_name):
-        time.sleep(1)
+        time_waited += 5
+        time.sleep(5)
+        if time_waited > time_limit:
+            break
+    
     print(f"进程 {process_name} 已退出。")
 
 def run_programs(config):
